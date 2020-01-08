@@ -1,0 +1,389 @@
+#!./btvWish
+# 
+# copyright 2004 
+# David Wang davewang@wam.umd.edu
+# Bruce Jacob blj@eng.umd.edu
+
+global trace_filename
+global trace_type
+
+#################################################################
+# 								#
+# if help is needed, just print out silly message and exit	#
+#								#
+#################################################################
+
+if {[lindex $argv 0] == "-h" || [lindex $argv 0] == "-help"} {
+	puts stdout " "
+	puts stdout " Usage:.btv "
+	puts stdout " There is no settable command options at this time"
+	exit
+} else {
+	set trace_type mase
+	set trace_filename "/home/davewang/mase_traces/a.trc"
+}
+
+#################################################################
+# 								#
+# This Program is now arranged in this fashion			#
+#								#
+# 1. Global variable declarations.				#
+#								#
+# 2. Global procedure declarations.				#
+#								#
+# 3. Static menu creation.					#
+#								#
+# 4. Widget creation and window assembly. (core of BTV)	#
+#								#
+# 5. Pop-up menu creation.					#
+#								#
+# 6. Mouse and Keyboard bindings.				#
+#								#
+#################################################################
+
+#################################################################
+#								#
+# global variable declarations					#
+#								#
+#################################################################
+
+global x_axis_scale
+global y_axis_scale
+global stat_request
+
+set x_axis_scale 200000
+set y_axis_scale 1
+set stat_request 0
+
+#########################################################
+#							#
+# Global procedure declarations.			#
+#							#
+#########################################################
+
+proc start_help { } {
+	set win1 .help
+	catch {destroy $win1}
+	toplevel $win1
+	wm title $win1 "BTV Help"
+	wm iconname $win1 "BTV Help"
+	button $win1.b -text "Close" -command "destroy $win1"
+	text $win1.t -relief raised -bd 2 -yscrollcommand "$win1.yscroll set"
+	scrollbar $win1.yscroll -command "$win1.t yview"
+	pack $win1.b -side bottom
+	pack $win1.yscroll -side right -fill y
+	pack $win1.t -side top -expand yes -fill both
+	$win1.t insert end "\nBTV (BUS Trace Viewer) Help\n" verybig
+ 	$win1.t insert end "\n1. Usage: " big	
+ 	$win1.t insert end "\n"
+ 	$win1.t insert end "There are no settable command line options at this point.\n"
+ 	$win1.t insert end "This program is being developed by David Wang davewang@wam.umd.edu \n"
+ 	$win1.t insert end " \n"
+ 	$win1.t insert end "\n"
+ 	$win1.t insert end "\n\n Your comments are appreciated and welcomed.\n"
+}
+
+proc xscroll_update {first last} {
+    .btv xview moveto $first 
+    .xscroll set $first $last
+}
+
+proc yscroll_update {first last} {
+    .btv yview moveto $first
+    .yscroll set $first $last
+}
+
+proc set_mark {x y} {
+	.btv scan mark $x $y
+}
+
+proc set_move {x y} {
+	.btv scan move $x $y
+}
+
+proc set_stat {x y} {
+	global stat_request
+	if {$stat_request} { 
+		set stat_request 0
+		.btv scan stat_end $x $y
+	} else {
+		set stat_request 1
+		.btv scan stat_start $x $y
+	}
+}
+
+proc opentrace {my_trace_type w} {
+	global trace_filename
+	global trace_type
+	global trace_selected
+	set trace_type $my_trace_type
+	if {$trace_selected} {
+		puts "opening $trace_filename as a $trace_type trace"
+		.btv trace_read $trace_type $trace_filename
+		set mainwindow .
+		wm title $mainwindow "Bus Trace Viewer: $trace_type Trace: $trace_filename"
+	}
+	destroy $w
+}
+
+proc fileDialog {w ent operation} {
+	global trace_selected
+
+	global trace_filename
+
+	#   Type names              Extension(s)   
+	#
+	#---------------------------------------------------------
+	set types {
+		{"Trace files"           {.trc .doc}     }
+		{"All files"            *}
+	}
+	set trace_filename [tk_getOpenFile -filetypes $types -parent $w]
+	set trace_selected 1
+	if [string compare $trace_filename ""] {
+		$ent delete 0 end
+		$ent insert 0 $trace_filename
+		$ent xview end
+	}
+}
+
+proc readtrace {} {
+	global trace_filename
+	global trace_selected
+	set trace_selected 0
+	set w .filebox
+	catch {destroy $w}
+	toplevel $w
+	wm title $w "File Selection Dialogs"
+	wm iconname $w "filebox"
+
+	label $w.msg -wraplength 4i -justify left -text "Enter a file name in the entry box or click on the \"Browse\" buttons to select a file name using the file selection dialog."
+	pack $w.msg -side top
+
+	frame $w.buttons
+	pack $w.buttons -side bottom -fill x -pady 2m
+	button $w.buttons.openk6 -text "Read in K6 trace" -command "opentrace k6 $w"
+	button $w.buttons.openmase -text "Read in Mase trace" -command "opentrace mase $w"
+	button $w.buttons.opentm -text "Read in TM trace" -command "opentrace tm $w"
+	button $w.buttons.openss -text "Read in Modified SS trace" -command "opentrace ss $w"
+	button $w.buttons.dismiss -text Cancel -command "destroy $w"
+	pack $w.buttons.openk6 $w.buttons.openmase $w.buttons.opentm $w.buttons.openss $w.buttons.dismiss -side left -expand 1
+	set f [frame $w.readk6]
+	label $f.lab -text "Select a file to open: " -anchor e
+	entry $f.ent -width 20
+	button $f.but -text "Browse ..." -command "fileDialog $w $f.ent readk6"
+	pack $f.lab -side left
+	pack $f.ent -side left -expand yes -fill x
+	pack $f.but -side left
+	pack $f -fill x -padx 1c -pady 3
+}
+
+#################################################################
+#								#
+# create the Static menus					#
+#								#
+#################################################################
+
+frame .menu  -relief raised -bd 2
+
+set m .menu.file.m
+menubutton .menu.file -text "File" -menu $m 
+menu $m
+$m add command -label "Read in new trace" -command readtrace
+$m add sep
+$m add command -label "Quit" -command exit
+
+set m .menu.color.m
+menubutton .menu.color -text "Color" -menu $m
+menu $m
+$m add cascade -label "Background" -menu $m.bg
+menu $m.bg
+$m add cascade -label "FETCH (0)" -menu $m.fetch
+menu $m.fetch
+$m add cascade -label "MEM_RD(1)" -menu $m.mr
+menu $m.mr
+$m add cascade -label "MEM_WR(2)" -menu $m.mw
+menu $m.mw
+$m add cascade -label "IO_RD (3)" -menu $m.ior
+menu $m.ior
+$m add cascade -label "IO_WR" -menu $m.iow
+menu $m.iow
+$m add cascade -label "BOFF" -menu $m.boff
+menu $m.boff
+$m add cascade -label "UNKNOWN" -menu $m.unknown
+menu $m.unknown
+$m add cascade -label "grid" -menu $m.grid
+menu $m.grid
+
+for {set i 0} {$i < 16} {incr i 1} {
+        set color_name [btvUtils get_color_name $i]
+        $m.bg 	add command -label "BG      $color_name" -background $color_name -command ".btv set BG_color $i"
+        $m.fetch add command -label "FETCH  $color_name" -background $color_name -command ".btv set FETCH_color $i"
+        $m.mr 	add command -label "MEM_RD  $color_name" -background $color_name -command ".btv set MEM_RD_color $i"
+        $m.mw 	add command -label "MEM_WR  $color_name" -background $color_name -command ".btv set MEM_WR_color $i"
+        $m.ior 	add command -label "IO_RD   $color_name" -background $color_name -command ".btv set IO_RD_color $i"
+        $m.iow 	add command -label "IO_WR   $color_name" -background $color_name -command ".btv set IO_WR_color $i"
+        $m.boff	add command -label "BOFF    $color_name" -background $color_name -command ".btv set BOFF_color $i"
+        $m.unknown add command -label "UNKNOWN $color_name" -background $color_name -command ".btv set UNKNOWN_color $i"
+        $m.grid add command -label "grid    $color_name" -background $color_name -command ".btv set GRID_color $i"
+}
+
+set m .menu.misc.m
+menubutton .menu.misc -text "misc" -menu $m 
+menu $m
+$m add cascade -label "set showthread" -menu $m.showthread
+$m add cascade -label "set hashmode" -menu $m.hashmode
+$m add cascade -label "set showlegends" -menu $m.showlegends
+$m add cascade -label "set showlabels" -menu $m.showlabels
+$m add cascade -label "set threadcolorscheme" -menu $m.colorscheme
+$m add cascade -label "set showBWlimit" -menu $m.showlimit
+
+menu $m.showthread
+set m $m.showthread
+$m add radio -label "ALL" -variable show_thread_number -value -1  -command ".btv set show_thread -1"
+$m add radio -label "Thread 0" -variable show_thread_number -value 0  -command ".btv set show_thread 0"
+$m add radio -label "Thread 1" -variable show_thread_number -value 1  -command ".btv set show_thread 1"
+$m add radio -label "Thread 2" -variable show_thread_number -value 2  -command ".btv set show_thread 2"
+$m add radio -label "Thread 3" -variable show_thread_number -value 3  -command ".btv set show_thread 3"
+
+menu .menu.misc.m.hashmode
+set m .menu.misc.m.hashmode
+$m add radio -label "Hash to zero" -variable hashmode -value 0  -command ".btv set hash_mode 0"
+$m add radio -label "Float" -variable hashmode -value 1  -command ".btv set hash_mode 1"
+
+menu .menu.misc.m.showlegends
+set m .menu.misc.m.showlegends
+$m add radio -label "Hide Legends" -variable showlegends -value 0  -command ".btv set showlegends 0"
+$m add radio -label "Show Legends" -variable showlegends -value 1  -command ".btv set showlegends 1"
+$m add radio -label "Supress Text" -variable showlegends -value 2  -command ".btv set showlegends 2"
+
+menu .menu.misc.m.showlabels
+set m .menu.misc.m.showlabels
+$m add radio -label "Hide Labels" -variable showlabels -value 0  -command ".btv set showlabels 0"
+$m add radio -label "Show Labels" -variable showlabels -value 1  -command ".btv set showlabels 1"
+$m add radio -label "Supress Text" -variable showlabels -value 2 -command ".btv set showlabels 2"
+
+menu .menu.misc.m.colorscheme
+set m .menu.misc.m.colorscheme
+$m add radio -label "Color by Access Type" -variable hashmode -value 0 -command ".btv set color_scheme 0"
+$m add radio -label "Color by Thread" -variable hashmode -value 1 -command ".btv set color_scheme 1"
+
+menu .menu.misc.m.showlimit
+set m .menu.misc.m.showlimit
+$m add radio -label "Hide BW limit" -variable hashmode -value 0 -command ".btv set showlimit 0"
+$m add radio -label "Show BW limit" -variable hashmode -value 1 -command ".btv set showlimit 1"
+
+set m .menu.scale.m
+menubutton .menu.scale -text "scale" -menu $m 
+menu $m
+$m add cascade -label "set x_axis_scale" -menu $m.x_axis_scale
+$m add cascade -label "set y_axis_scale" -menu $m.y_axis_scale
+
+menu $m.x_axis_scale
+set m $m.x_axis_scale
+$m add radio -label "500 ns or cputick per pixel" -variable x_axis_scale -value 500  -command ".btv set x_axis_scale 500"
+$m add radio -label "1 us or cputick per pixel " -variable x_axis_scale -value 1000  -command ".btv set x_axis_scale 1000"
+$m add radio -label "2 us or cputick per pixel " -variable x_axis_scale -value 2000  -command ".btv set x_axis_scale 2000"
+$m add radio -label "5 us or cputick per pixel " -variable x_axis_scale -value 5000  -command ".btv set x_axis_scale 5000"
+$m add radio -label "10 us or cputick per pixel" -variable x_axis_scale -value 10000 -command ".btv set x_axis_scale 10000"
+$m add radio -label "20 us or cputick per pixel" -variable x_axis_scale -value 20000 -command ".btv set x_axis_scale 20000"
+$m add radio -label "50 us or cputick per pixel" -variable x_axis_scale -value 50000 -command ".btv set x_axis_scale 50000"
+$m add radio -label "100 us or cputick per pixel" -variable x_axis_scale -value 100000 -command ".btv set x_axis_scale 100000"
+$m add radio -label "200 us or cputick per pixel" -variable x_axis_scale -value 200000 -command ".btv set x_axis_scale 200000"
+$m add radio -label "500 us or cputick per pixel" -variable x_axis_scale -value 500000 -command ".btv set x_axis_scale 500000"
+$m add radio -label "1 ms or cputick per pixel" -variable x_axis_scale -value 1000000 -command ".btv set x_axis_scale 1000000"
+$m add radio -label "2 ms or cputick per pixel" -variable x_axis_scale -value 2000000 -command ".btv set x_axis_scale 2000000"
+$m add radio -label "5 ms or cputick per pixel" -variable x_axis_scale -value 5000000 -command ".btv set x_axis_scale 5000000"
+$m add radio -label "10 ms or cputick per pixel" -variable x_axis_scale -value 10000000 -command ".btv set x_axis_scale 10000000"
+
+set m .menu.scale.m.y_axis_scale
+menu $m
+$m add radio -label "1 " -variable y_axis_scale -value 1  -command ".btv set y_axis_scale 1"
+$m add radio -label "2 " -variable y_axis_scale -value 2  -command ".btv set y_axis_scale 2"
+$m add radio -label "5 " -variable y_axis_scale -value 5  -command ".btv set y_axis_scale 5"
+$m add radio -label "10" -variable y_axis_scale -value 10 -command ".btv set y_axis_scale 10"
+$m add radio -label "20" -variable y_axis_scale -value 20 -command ".btv set y_axis_scale 20"
+$m add radio -label "50" -variable y_axis_scale -value 50 -command ".btv set y_axis_scale 50"
+$m add radio -label "100" -variable y_axis_scale -value 100 -command ".btv set y_axis_scale 100"
+$m add radio -label "200" -variable y_axis_scale -value 200 -command ".btv set y_axis_scale 200"
+
+set m .menu.about.m
+menubutton .menu.about -text "About BTV" -menu $m 
+menu $m
+$m add command -label "Version 0.02"
+$m add command -label "About" -command start_help
+
+#################################################################
+#								#
+# Main BTV program starts here.				 	#
+#								#
+#################################################################
+
+set w .
+wm title $w "Bus Trace Viewer"
+wm iconname $w "Bus Trace Viewer"
+
+# Window Assembly.
+# put the menu items into the menu bar.
+
+pack .menu.file .menu.color .menu.scale .menu.misc -in .menu -side left
+pack .menu.about -in .menu -side right
+
+# create the scrollbars 
+scrollbar .yscroll -command ".btv yview" -orient vertical
+scrollbar .xscroll -command ".btv xview" -orient horizontal
+
+# put the objects in and assemble the menu, the scrollbar, and the scroll objects
+# all together.
+
+wm minsize . 1 1
+
+btvWin .btv -yscrollcommand "yscroll_update" -xscrollcommand "xscroll_update"
+
+pack .menu -side top -fill x
+pack .xscroll -side bottom -fill x
+pack .yscroll -side right -fill y
+pack .btv -side bottom -expand yes -fill both
+
+set myfile "~/.btvrc"
+if {[file readable $myfile] == 1} {
+	source $myfile
+}
+
+#########################################################
+#							#
+# Mouse and Keyboard bindings.				#
+#							#
+#########################################################
+
+bind .btv <1> {set_mark %x %y}
+bind .btv <B1-Motion> {set_move %x %y}
+bind .btv <3> {set_stat %x %y}
+bind .btv <z> {.btv zoom in}
+bind .btv <Z> {.btv zoom out}
+
+#########################################################
+#							#
+# Final startup commands				#
+#							#
+#########################################################
+
+focus .btv
+
+global trace_filename
+global trace_type
+if {[file readable $trace_filename] == 1 } {
+	global x_axis_scale
+	global y_axis_scale
+	.btv trace_read $trace_type $trace_filename
+	.btv set y_axis_scale $y_axis_scale
+	.btv set x_axis_scale $x_axis_scale
+	set w .
+	wm title $w "Bus Trace Viewer: $trace_type Trace: $trace_filename"
+} else {
+	set $trace_filename "NO_TRACE"
+        puts "$trace_filename is not readable"
+	set w .
+	wm title $w "Bus Trace Viewer: No Trace Found"
+} 
+
