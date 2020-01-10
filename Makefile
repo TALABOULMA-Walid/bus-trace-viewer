@@ -6,7 +6,7 @@ CC = gcc
 
 OPT = -O3 
 
-INCLUDEPATH = -I/usr/local/include -I/usr/include -I/usr/openwin/include
+INCLUDEPATH = -I/usr/local/include -I/usr/include -I/usr/openwin/include -I/usr/include/tcl8.4
 LIBDIRS = -L/usr/local/lib \
         -L/usr/X11R6/lib \
         -L/usr/lib
